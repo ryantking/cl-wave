@@ -4,11 +4,21 @@
 
 (in-package #:cl-wave)
 
+(defconstant +riff-id+ "RIFF")
+(defconstant +file-size+ 38)
+(defconstant +file-type+ "WAVE")
+
+(defconstant +fmt-id+ "fmt ")
+(defconstant +fmt-size+ 18)
+(defconstant +compression-code+ 1)
 (defconstant +num-channels+ 1)
 (defconstant +sample-rate+ 44100)
 (defconstant +bytes-per-second+ 88200)
 (defconstant +bytes-per-sample+ 2)
 (defconstant +bits-per-sample+ 16)
+
+(defconstant +data-id+ "data")
+(defconstant +data-size+ 0)
 
 (defun read-uint (stream n)
   "Reads an n-byte unsigned little-endian integer from stream."
@@ -26,6 +36,15 @@
      collecting (code-char byte) into chars
      finally
        (when chars (return (coerce chars 'string)))))
+
+(defun write-uint (stream uint n)
+  (loop for i below n do
+       (write-byte (ldb (byte 8 (* i 8)) uint) stream)))
+
+(defun write-tag (stream tag)
+  (loop for c across tag
+     for i = 0 then (1+ i) do
+       (write-byte (char-code c) stream)))
 
 (defclass wave ()
   ((filename :initform ""
@@ -80,12 +99,12 @@
                             collect (if (> frame max-value)
                                         (- frame value-range)
                                         frame))))
-            (if (and (equal riff-id "RIFF")
-                     (equal fmt-id "fmt ")
-                     (equal data-id "data")
-                     (equal file-type "WAVE")
-                     (= fmt-size 18)
-                     (= compression-code 1))
+            (if (and (equal riff-id +riff-id+)
+                     (equal fmt-id +fmt-id+)
+                     (equal data-id +data-id+)
+                     (equal file-type +file-type+)
+                     (= fmt-size +fmt-size+)
+                     (= compression-code +compression-code+))
                 (make-instance 'read-wave
                                :filename filename
                                :io in
@@ -95,10 +114,37 @@
                                :bytes-per-sample bytes-per-sample
                                :bits-per-sample bits-per-sample
                                :frames frames)
-                (error "Invalid Wave file."))))))
+                (error "Invalid Wave file."))))
+        ((eq direction :output)
+         (make-instance 'read-wave
+                        :filename filename
+                        :io (open filename
+                                  :element-type '(unsigned-byte 8)
+                                  :direction :output
+                                  :if-exists :supersede)))))
 
-(defmethod close-wave ((wave-object wave) &key abort)
+(defmethod close-wave ((wave-object read-wave) &key abort)
   (close (io wave-object) :abort abort))
+
+(defmethod close-wave ((wave-object write-wave) &key abort)
+  (let* ((byte-width (bytes-per-sample wave-object))
+         (data-size (length (frames wave-object))))
+    (write-tag (io wave-object) +riff-id+)
+    (write-uint (io wave-object) (+ +file-size+ data-size) 4)
+    (write-tag (io wave-object) +file-type+)
+    (write-tag (io wave-object) +fmt-id+)
+    (write-uint (io wave-object) +fmt-size+ 4)
+    (write-uint (io wave-object) +compression-code+ 2)
+    (write-uint (io wave-object) (num-channels wave-object) 2)
+    (write-uint (io wave-object) (sample-rate wave-object) 4)
+    (write-uint (io wave-object) (bytes-per-second wave-object) 4)
+    (write-uint (io wave-object) byte-width 2)
+    (write-uint (io wave-object) (bits-per-sample wave-object) 4)
+    (write-tag (io wave-object) +data-id+)
+    (write-uint (io wave-object) (* data-size byte-width) 4)
+    (loop for frame in (frames wave-object) do
+         (write-uint (io wave-object) frame byte-width))
+    (close (io wave-object) :abort abort)))
 
 (defmacro with-open-wave ((wave-object filename &key (direction :input)) &body body)
   (let ((g (gensym)))
