@@ -10,25 +10,12 @@
 (defconstant +bytes-per-sample+ 2)
 (defconstant +bits-per-sample+ 16)
 
-(defclass wave ()
-  ((fname :initform "" :accessor fname)
-   (num-channels :initform +num-channels+ :accessor num-channels)
-   (sample-rate :initform +sample-rate+ :accessor sample-rate)
-   (bytes-per-second :initform +bytes-per-second+ :accessor bytes-per-second)
-   (bytes-per-sample :initform +bytes-per-sample+ :accessor bytes-per-sample)
-   (bits-per-sample :initform +bits-per-sample+ :accessor bits-per-sample)
-   (frames :initform '() :accessor frames)))
-
-(defclass read-wave (wave) ())
-
-(defclass write-wave (wave) ())
-
 (defun read-uint (stream n)
   "Reads an n-byte unsigned little-endian integer from stream."
   (loop for i below n
-        with uint = 0 do
-          (setf (ldb (byte 8 (* i 8)) uint) (read-byte stream))
-          finally (return uint)))
+     with uint = 0 do
+       (setf (ldb (byte 8 (* i 8)) uint) (read-byte stream))
+     finally (return uint)))
 
 (defun read-tag (stream)
   "Reads a four character tag from the stream and returns a string
@@ -39,6 +26,20 @@
      collecting (code-char byte) into chars
      finally
        (when chars (return (coerce chars 'string)))))
+
+(defclass wave ()
+  ((fname :initform "" :accessor fname)
+   (stream :initform nil :accessor stream)
+   (num-channels :initform +num-channels+ :accessor num-channels)
+   (sample-rate :initform +sample-rate+ :accessor sample-rate)
+   (bytes-per-second :initform +bytes-per-second+ :accessor bytes-per-second)
+   (bytes-per-sample :initform +bytes-per-sample+ :accessor bytes-per-sample)
+   (bits-per-sample :initform +bits-per-sample+ :accessor bits-per-sample)
+   (frames :initform '() :accessor frames)))
+
+(defclass read-wave (wave) ())
+
+(defclass write-wave (wave) ())
 
 (defun make-wave ()
   (list :file-size 0
