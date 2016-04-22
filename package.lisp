@@ -12,10 +12,5 @@
            #:get-sample-width
            #:get-num-frames
            #:get-params
-           #:get-frames
-           #:set-num-channels
-           #:set-sample-width
-           #:set-sample-rate
-           #:set-frames
-           #:write-file))
+           #:get-frames))
 

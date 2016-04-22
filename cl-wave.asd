@@ -7,12 +7,9 @@
   :version "0.1.0"
   :author "Ryan King <rtking@bu.edu>"
   :license "MIT License"
-  :depends-on (#:alexandria)
   :serial t
   :components ((:file "package")
                (:file "wave-io")
-               (:file "chunks")))
-               ;(:file "cl-wave")
-               ;(:file "read")
-               ;(:file "write")))
+               (:file "chunks")
+               (:file "cl-wave")))
 
