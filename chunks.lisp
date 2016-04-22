@@ -3,64 +3,53 @@
 ;;;;
 ;;;; Definitions of the chunks that compose a wave file.
 
-;;; An alist to hold all the information about the fields associated with a particular chunk
-;;; Chunks are associated using their ASCII four-character tags
+;;; An associated-list with to store information about each chunk's fields
+;;; Information is stored in the following format:
+;;; (list (cons <chunk-id> (list (cons <field-name> <byte-size>))))
+;;; No byte size is used to indicate a special field such as file-type or frames
 (defparameter *chunks*
-  (list (cons "RIFF" (list (list :name :file-type
-                                 :reader #'read-tag
-                                 :size 4
-                                 :default "WAVE")))
-        (cons "fmt " (list (list :name :compression-code
-                                 :reader #'read-u2
-                                 :size 2
-                                 :default 1)
-                           (list :name :num-channels
-                                 :reader #'read-u2
-                                 :size 2
-                                 :default 1)
-                           (list :name :sample-rate
-                                 :reader #'read-u4
-                                 :size 4
-                                 :default 44100)
-                           (list :name :byte-rate
-                                 :reader #'read-u4
-                                 :size 4
-                                 :default 88200)
-                           (list :name :sample-bytes
-                                 :reader #'read-u2
-                                 :size 2
-                                 :default 2)
-                           (list :name :sample-bits
-                                 :reader #'read-u2
-                                 :size 2
-                                 :default 16)
-                           (list :name :extension-size
-                                 :reader #'read-u2
-                                 :size 2
-                                 :default 0)))
-        (cons "data" (list (list :name :frames
-                                 :reader #'read-frames
-                                 :size 0
-                                 :default '())))))
+  (list (cons "RIFF" (list (cons :file-type nil)))
+        (cons "fmt " (list (cons :compression-code 2)
+                           (cons :num-channels 2)
+                           (cons :sample-rate 4)
+                           (cons :byte-rate 4)
+                           (cons :sample-bytes 2)
+                           (cons :sample-bits 2)
+                           (cons :extension-size 2)))
+        (cons "data" (list (cons :frames nil)))))
 
-;;; Functions for Reading Chunks
-(defun read-field (stream name reader params chunk-size)
+(defun default-params ()
+  "Create a default set of parameters for writing waves."
+  (list :file-type "WAVE"
+        :compression-code 1
+        :num-channels 1
+        :sample-rate 44100
+        :byte-rate 88200
+        :sample-bytes 2
+        :sample-bits 16
+        :extension-size 0
+        :frames '()))
+
+;;; Functions to handle reading chunks
+(defun read-field (stream field params chunk-size)
   "Reads a single field from a chunk."
-  (if (eq name :frames)
-      (list name (funcall reader stream
-                          (getf params :sample-bytes) chunk-size
-                          (if (= (getf params :sample-bytes) 2)
-                              #'read-s2
-                              #'read-s4)))
-    (list name (funcall reader stream))))
+  (cond ((integerp (cdr field))
+         (list (cdr field) (car field) (read-uint stream (cdr field))))
+        ((eq (car field) :frames)
+         (list chunk-size
+               (car field)
+               (read-frames stream (getf params :sample-bytes) chunk-size)))
+        (t
+         (list 4 (car field) (read-tag stream)))))
 
 (defun read-chunk (stream fields params)
   "Creates a list of all of the properties contained in one chunk."
-  (loop with chunk-size = (read-u4 stream)
+  (loop with chunk-size = (read-uint stream 4)
      for field in fields
-     for pos = (+ (or pos 0) (getf field :size))
+     for value = (read-field stream field params chunk-size)
+     for pos = (+ (or pos 0) (pop value))
      while (<= pos chunk-size)
-     append (read-field stream (getf field :name) (getf field :reader) params chunk-size)))
+     append value))
 
 (defun read-chunks (stream)
   "Creates a list of every property contained in all the chunks."
