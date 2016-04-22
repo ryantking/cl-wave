@@ -10,9 +10,9 @@
   :depends-on (#:alexandria)
   :serial t
   :components ((:file "package")
-               (:file "chunks")
                (:file "wave-io")
+               (:file "chunks")))
                ;(:file "cl-wave")
-               (:file "read")
-               (:file "write")))
+               ;(:file "read")
+               ;(:file "write")))
 
