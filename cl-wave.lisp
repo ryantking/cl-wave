@@ -16,6 +16,7 @@
 (defconstant +bytes-per-second+ 88200)
 (defconstant +bytes-per-sample+ 2)
 (defconstant +bits-per-sample+ 16)
+(defconstant +extension-size+ 0)
 
 (defconstant +data-id+ "data")
 (defconstant +data-size+ 0)
@@ -53,6 +54,9 @@
    (io :initform nil
            :initarg :io
            :accessor io)
+   (fmt-size :initform +fmt-size+
+             :initarg :fmt-size
+             :accessor fmt-size)
    (num-channels :initform +num-channels+
                  :initarg :num-channels
                  :accessor num-channels)
@@ -68,6 +72,9 @@
    (bits-per-sample :initform +bits-per-sample+
                     :initarg :bits-per-sample
                     :accessor bits-per-sample)
+   (extension-size :initform +extension-size+
+                   :initarg :extension-size
+                   :accessor extension-size)
    (frames :initform '()
            :accessor frames
            :initarg :frames)))
@@ -89,7 +96,10 @@
                  (sample-rate (read-uint in 4))
                  (bytes-per-second (read-uint in 4))
                  (bytes-per-sample (read-uint in 2))
-                 (bits-per-sample (read-uint in 4))
+                 (bits-per-sample (read-uint in 2))
+                 (extension-size (if (= fmt-size 18)
+                                     (read-uint in 2)
+                                     0))
                  (data-id (read-tag in))
                  (data-size (read-uint in 4))
                  (value-range (expt 2 bits-per-sample))
@@ -108,11 +118,13 @@
                 (make-instance 'read-wave
                                :filename filename
                                :io in
+                               :fmt-size fmt-size
                                :num-channels num-channels
                                :sample-rate sample-rate
                                :bytes-per-second bytes-per-second
                                :bytes-per-sample bytes-per-sample
                                :bits-per-sample bits-per-sample
+                               :extension-size extension-size
                                :frames frames)
                 (error "Invalid Wave file."))))
         ((eq direction :output)
@@ -139,7 +151,9 @@
     (write-uint (io wave-object) (sample-rate wave-object) 4)
     (write-uint (io wave-object) (bytes-per-second wave-object) 4)
     (write-uint (io wave-object) byte-width 2)
-    (write-uint (io wave-object) (bits-per-sample wave-object) 4)
+    (write-uint (io wave-object) (bits-per-sample wave-object) 2)
+    (when (= (fmt-size wave-object) 18)
+      (write-uint (io wave-object) (extension-size wave-object) 2))
     (write-tag (io wave-object) +data-id+)
     (write-uint (io wave-object) (* data-size byte-width) 4)
     (loop for frame in (frames wave-object) do
