@@ -4,6 +4,25 @@
 
 (in-package #:cl-wave)
 
+(defconstant +num-channels+ 1)
+(defconstant +sample-rate+ 44100)
+(defconstant +bytes-per-second+ 88200)
+(defconstant +bytes-per-sample+ 2)
+(defconstant +bits-per-sample+ 16)
+
+(defclass wave ()
+  ((fname :initform "" :accessor fname)
+   (num-channels :initform +num-channels+ :accessor num-channels)
+   (sample-rate :initform +sample-rate+ :accessor sample-rate)
+   (bytes-per-second :initform +bytes-per-second+ :accessor bytes-per-second)
+   (bytes-per-sample :initform +bytes-per-sample+ :accessor bytes-per-sample)
+   (bits-per-sample :initform +bits-per-sample+ :accessor bits-per-sample)
+   (frames :initform '() :accessor frames)))
+
+(defclass read-wave (wave) ())
+
+(defclass write-wave (wave) ())
+
 (defun read-uint (stream n)
   "Reads an n-byte unsigned little-endian integer from stream."
   (loop for i below n
