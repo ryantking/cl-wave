@@ -49,15 +49,49 @@
       (subseq (getf (params wave) :frames) start end)
       (subseq (getf (params wave) :frames) start)))
 
+(defmethod set-num-channels ((wave write-wave) num-channels)
+  (setf (getf (params wave) :num-channels) num-channels))
+
+(defmethod set-sample-rate ((wave write-wave) sample-rate)
+  (setf (getf (params wave) :sample-rate) sample-rate))
+
+(defmethod set-sample-width ((wave write-wave) bytes)
+  (setf (getf (params wave) :sample-bytes) bytes)
+  (setf (getf (params wave) :sample-bits) (* bytes 8)))
+
+(defmethod set-frames ((wave write-wave) frames)
+  (setf (getf (params wave) :frames) frames))
+
 ;;; Functions to open/close wave objects.
 (defun open-wave (filename &key (direction :input))
   "Creates a new wave object with a pointer to its file stream."
   (cond ((eq direction :input)
          (make-instance 'read-wave
-                        :io (open filename :element-type '(unsigned-byte 8))))))
+                        :io (open filename :element-type '(unsigned-byte 8))))
+        ((eq direction :output)
+         (make-instance 'write-wave
+                        :io (open filename
+                                  :element-type '(unsigned-byte 8)
+                                  :direction :output
+                                  :if-exists :supersede)
+                        :params (default-params)))))
 
 (defmethod close-wave ((wave read-wave) &key abort)
   "Closes a read-only wave file."
+  (close (io wave) :abort abort))
+
+(defmethod close-wave ((wave write-wave) &key abort)
+  (when (getf (params wave) :extension-size)
+    (incf (cdr (assoc "RIFF" (getf (params wave) :chunk-sizes) :test #'equal)) 2)
+    (incf (cdr (assoc "fmt " (getf (params wave) :chunk-sizes) :test #'equal)) 2))
+  (when (getf (params wave) :frames)
+    (incf (cdr (assoc "RIFF" (getf (params wave) :chunk-sizes) :test #'equal))
+          (* (length (getf (params wave) :frames))
+             (getf (params wave) :sample-bytes)))
+    (incf (cdr (assoc "data" (getf (params wave) :chunk-sizes) :test #'equal))
+          (* (length (getf (params wave) :frames))
+             (getf (params wave) :sample-bytes))))
+  (write-chunks (io wave) (params wave))
   (close (io wave) :abort abort))
 
 (defmacro with-open-wave ((wave-object filename &key (direction :input)) &body body)

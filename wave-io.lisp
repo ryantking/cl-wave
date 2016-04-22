@@ -29,7 +29,7 @@
      collect (if (> frame max-value) (- frame diff) frame)))
 
 ;;; Writing Functions
-(defun write-uint (stream u2 bytes)
+(defun write-uint (stream uint bytes)
   (loop repeat bytes
      for n = 0 then (+ n 8) do
        (write-byte (ldb (byte 8 n) uint) stream))
@@ -39,3 +39,7 @@
   "Writes a 4-character ASCII tag to the stream."
   (loop for ch across tag do
        (write-byte (char-code ch) stream)) stream)
+
+(defun write-frames (stream frames sample-width)
+  (loop for frame in frames
+     do (write-uint stream frame sample-width)))

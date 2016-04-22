@@ -12,5 +12,9 @@
            #:get-sample-width
            #:get-num-frames
            #:get-params
-           #:get-frames))
+           #:get-frames
+           #:set-num-channels
+           #:set-sample-rate
+           #:set-sample-width
+           #:set-frames))
 
