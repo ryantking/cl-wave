@@ -28,16 +28,6 @@
        (setf (ldb (byte 8 (* i 8)) uint) (read-byte stream))
      finally (return uint)))
 
-(defun read-tag (stream)
-  "Reads a four character tag from the stream and returns a string
-   or nil if its the end of the file."
-  (loop repeat 4
-     for byte = (read-byte stream nil)
-     while byte
-     collecting (code-char byte) into chars
-     finally
-       (when chars (return (coerce chars 'string)))))
-
 (defun write-uint (stream uint n)
   (loop for i below n do
        (write-byte (ldb (byte 8 (* i 8)) uint) stream)))

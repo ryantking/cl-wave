@@ -3,9 +3,6 @@
 ;;;;
 ;;;; Definitions of the chunks that compose a wave file.
 
-;;; The number of bits in each byte of a wave integer
-(defparameter *uint-size* 8)
-
 ;;; An alist to hold all the information about the fields associated with a particular chunk
 ;;; Chunks are associated using their ASCII four-character tags
 (defparameter *chunks*
