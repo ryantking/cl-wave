@@ -4,7 +4,7 @@
 
 (asdf:defsystem #:cl-wave
   :description "A library for interfacing with wave audio files"
-  :version "0.1.0"
+  :version "0.1.2"
   :author "Ryan King <rtking@bu.edu>"
   :license "MIT License"
   :serial t

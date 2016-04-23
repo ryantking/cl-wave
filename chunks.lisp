@@ -62,7 +62,6 @@
      append (read-chunk stream fields params) into params
      finally (return params)))
 
-;;; Functions to handle writing chunks
 (defun write-field (stream field params)
   "Writes a single field to a wave file."
   (cond ((integerp (cdr field))
