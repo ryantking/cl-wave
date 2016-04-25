@@ -1,7 +1,7 @@
-(in-package #:cl-wave)
 ;;;; wave.lisp
 ;;;;
-;;;; Wave class definition
+;;;; Wave class definition and methods
+(in-package #:cl-wave)
 
 ;;; Wave Class
 (defclass wave ()
@@ -33,18 +33,15 @@
 
 ;;; Wave Methods
 (defmethod initialize-instance :after ((wave read-wave) &key)
-  "Sets the parameters of the wave by reading all its chunks on initialization."
+  "Reads the wave's binary data the sets its parameters/frames accordingly."
   (setf (chunks wave) (read-chunks (io wave) #'wave-parser))
-  (loop for chunk in (chunks wave)
-     for id = (getf chunk :chunk-id)
-     for size = (getf chunk :chunk-size)
-     for data = (getf chunk :chunk-data)
-     if (string= id "fmt ") do
-       (setf (params wave) data)
-     else if (string= id "data") do
-       (setf (frames wave) data)
-     end))
+  (setf (params wave) (getf (cadr (chunks wave)) :chunk-data))
+  (setf (frames wave) (getf (caddr (chunks wave)) :chunk-data)))
 
+(defmethod initialize-instance :after ((wave write-wave) &key)
+  "Creates a wave with the default parameters and no frames."
+  (setf (params wave) (getf (cadr (chunks wave)) :chunk-data))
+  (setf (frames wave) (getf (caddr (chunks wave)) :chunk-data)))
 
 (defmethod get-num-channels ((wave wave))
   "Returns the number of channels the wave object has."
@@ -76,20 +73,25 @@
       (subseq (frames wave) start)))
 
 (defmethod set-num-channels ((wave write-wave) num-channels)
+  "Sets the number of channels."
   (setf (getf (params wave) :num-channels) num-channels))
 
 (defmethod set-sample-rate ((wave write-wave) sample-rate)
+  "Sets the sample rate."
   (setf (getf (params wave) :sample-rate) sample-rate))
 
 (defmethod set-sample-width ((wave write-wave) bytes)
+  "Sets the sample width."
   (setf (getf (params wave) :sample-bytes) bytes)
   (setf (getf (params wave) :sample-bits) (* bytes 8)))
 
-(defmethod set-frames ((wave write-wave) frames)
-  (setf (getf (params wave) :frames) frames))
+(defmethod set-frames ((wave write-wave) new-frames)
+  "Sets the frames."
+  (setf (frames wave) new-frames))
 
-;;; Parser for wave binary
+;;; Parser/Printer for Wave Binary
 (defun wave-parser (stream chunk-id chunk-size chunks)
+  "Parsing function for wave's RIFF chunks."
   (cond ((string= chunk-id "fmt ")
          (append (list :compression-code (read-uint stream 2)
                        :num-channels (read-uint stream 2)
@@ -100,14 +102,25 @@
                  (when (= chunk-size 18)
                    (list :extension-size (read-uint stream 2)))))
         ((string= chunk-id "data")
-         (loop with width = (loop for chunk in chunks
-                               when (string= (getf chunk :chunk-id) "fmt ")
-                               return (getf (getf chunk :chunk-data) :sample-bytes))
-            with range = (expt 2 (* width 8))
-            with max-value = (1- (/ range 2))
-            repeat (/ chunk-size width)
-            for frame = (read-uint stream width)
-            if (> frame max-value) collect (- frame range)
-            else collect frame end))
+         (loop with bytes = (getf (getf (cadr chunks) :chunk-data) :sample-bytes)
+            repeat (/ chunk-size bytes)
+            collect (read-sint stream bytes)))
         (t
          (default-parser stream chunk-id chunk-size chunks))))
+
+(defun wave-printer (stream chunk-id chunk-size chunk-data chunks)
+  "Printing function for wave's RIFF chunks."
+  (cond ((string= chunk-id "fmt ")
+         (write-uint stream (getf chunk-data :compression-code) 2)
+         (write-uint stream (getf chunk-data :num-channels) 2)
+         (write-uint stream (getf chunk-data :sample-rate) 4)
+         (write-uint stream (getf chunk-data :byte-rate) 4)
+         (write-uint stream (getf chunk-data :sample-bytes) 2)
+         (write-uint stream (getf chunk-data :sample-bits) 2)
+         (when (= chunk-size 18)
+           (write-uint stream (getf chunk-data :extension-size) 2)))
+        ((string= chunk-id "data")
+         (loop with bytes = (getf (getf (cadr chunks) :chunk-data) :sample-bytes)
+            for frame in chunk-data do (write-sint stream frame bytes)))
+        (t
+         (default-printer stream chunk-id chunk-size chunk-data chunks))))

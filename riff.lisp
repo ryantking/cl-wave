@@ -1,41 +1,50 @@
-(in-package #:cl-wave)
 ;;;; chunks.lisp
 ;;;;
 ;;;; Functions for reading/writing to RIFF files
+(in-package #:cl-wave)
 
-;;; Functions for Reading/Writing Binary
-(defun read-uint (stream bytes &optional (eof-error-p t))
-  (loop repeat bytes
-     for n = 0 then (+ n 8)
-     with uint = 0 do
-       (setf (ldb (byte 8 n) uint) (read-byte stream eof-error-p))
+;;; Functions to read/write binary files
+(defun read-uint (stream bytes)
+  "Reads an unsigned integer from the stream with the specified number of bytes."
+  (loop for n below (* bytes 8) by 8
+     with uint = 0 do (setf (ldb (byte 8 n) uint) (read-byte stream))
      finally (return uint)))
+
+(defun read-sint (stream bytes)
+  "Reads a signed integer from the stream with the specified number of bytes."
+  (let1 (sint (read-uint stream bytes))
+    (if (> sint (1- (expt 2 (1- (* bytes 8)))))
+        (- sint (expt 2 (* bytes 8)))
+        sint)))
 
 (defun read-tag (stream)
   "Reads a 4-character ASCII tag from the stream."
   (loop repeat 4
      for byte = (read-byte stream nil)
-     while byte
-     collecting (code-char byte) into chars
-     finally (when chars (return (coerce chars 'string)))))
+     if byte collect (code-char byte) into chars
+     else return nil end
+     finally (return (coerce chars 'string))))
 
 (defun write-uint (stream uint bytes)
-  (loop repeat bytes
-     for n = 0 then (+ n 8) do
-       (write-byte (ldb (byte 8 n) uint) stream))
-  stream)
+  "Writes an unsigned integer to the stream with the specified number of bytes."
+  (loop for n below (* bytes 8) by 8 do (write-byte (ldb (byte 8 n) uint) stream)))
+
+(defun write-sint (stream sint bytes)
+  "Writes a signed integer to the stream with the specified number of bytes."
+  (when (< sint 0) (incf sint (expt 2 (* bytes 8))))
+  (loop for n below (* bytes 8) by 8 do (write-byte (ldb (byte 8 n) sint) stream)))
 
 (defun write-tag (stream tag)
   "Writes a 4-character ASCII tag to the stream."
-  (loop for ch across tag do
-       (write-byte (char-code ch) stream)) stream)
+  (loop for ch across tag do (write-byte (char-code ch) stream)))
 
-;;; Functions to handle reading chunks
+;;; Functions to read/write RIFF chunks
 (defun default-parser (stream chunk-id chunk-size chunks)
-  (loop repeat chunk-size
-                 collect (read-uint stream 1)))
+  "Parses a chunk by reading the data into a list of 1-byte unsigned integers."
+  (loop repeat chunk-size collect (read-uint stream 1)))
 
 (defun read-chunk (stream parser chunks)
+  "Reads a single RIFF chunk using the specified parsing function."
   (when-let* ((chunk-id (read-tag stream))
               (chunk-size (read-uint stream 4))
               (chunk-data (if (string= chunk-id "RIFF")
@@ -46,32 +55,27 @@
           :chunk-data chunk-data)))
 
 (defun read-chunks (stream &optional (parser #'default-parser))
-  "Reads every chunk in a given RIFF file using the parsers provided"
+  "Reads every RIFF chunk in a file using the specified parsing function."
   (loop for chunk = (read-chunk stream parser chunks)
-       unless chunk return chunks
-       collect chunk into chunks))
+     if chunk collect chunk into chunks
+     else return chunks))
 
-(defun write-field (stream field params)
-  "Writes a single field to a wave file."
-  (cond ((integerp (cdr field))
-         (write-uint stream (getf params (car field)) (cdr field)) (cdr field))
-        ((eq (car field) :frames)
-         (write-frames stream (getf params (car field)) (getf params :sample-bytes))
-         (* (length (getf params :frames)) (getf params :sample-bytes)))
-        (t
-         (write-tag stream (getf params (car field))) 4)))
+(defun default-printer (stream chunk-id chunk-size chunk-data chunks)
+  "Prints a chunk by printing each byte of data as an unsigned integer."
+  (loop for b in chunk-data do (write-uint stream b 1)))
 
-(defun write-chunk (stream fields params chunk-size)
-  "Writes a chunk to a wave file."
-  (loop for field in fields
-     for size = (write-field stream field params)
-     for pos = (+ (or pos 0) size)
-     while (< pos chunk-size)))
+(defun write-chunk (stream printer chunk chunks)
+  "Writes a single RIFF chunk using the specified printing function."
+  (let ((chunk-id (getf chunk :chunk-id))
+        (chunk-size (getf chunk :chunk-size))
+        (chunk-data (getf chunk :chunk-data)))
+    (write-tag stream chunk-id)
+    (write-uint stream chunk-size 4)
+    (if (string= chunk-id "RIFF")
+        (write-tag stream chunk-data)
+        (funcall printer stream chunk-id chunk-size chunk-data chunks))))
 
-(defun write-chunks (stream chunk-map params)
-  "Writes every chunk to a single wave file."
-  (loop for chunk in chunk-map
-     for chunk-size = (cdr (assoc (car chunk) (getf params :chunk-sizes) :test #'equal)) do
-       (write-tag stream (car chunk))
-       (write-uint stream chunk-size 4)
-       (write-chunk stream (cdr chunk) params chunk-size)))
+(defun write-chunks (stream chunks &optional (printer #'default-printer))
+  "Reads every RIFF chunk in a file using the specified printing function."
+  (loop for chunk in chunks do
+       (write-chunk stream printer chunk chunks)))
