@@ -3,7 +3,7 @@
 ;;;; Basic package configuration file.
 
 (defpackage #:cl-wave
-  (:use #:cl)
+  (:use #:cl #:rtk #:alexandria)
   (:export #:open-wave
            #:close-wave
            #:with-open-wave

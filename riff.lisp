@@ -3,39 +3,53 @@
 ;;;;
 ;;;; Functions for reading/writing to RIFF files
 
+;;; Functions for Reading/Writing Binary
+(defun read-uint (stream bytes &optional (eof-error-p t))
+  (loop repeat bytes
+     for n = 0 then (+ n 8)
+     with uint = 0 do
+       (setf (ldb (byte 8 n) uint) (read-byte stream eof-error-p))
+     finally (return uint)))
+
+(defun read-tag (stream)
+  "Reads a 4-character ASCII tag from the stream."
+  (loop repeat 4
+     for byte = (read-byte stream nil)
+     while byte
+     collecting (code-char byte) into chars
+     finally (when chars (return (coerce chars 'string)))))
+
+(defun write-uint (stream uint bytes)
+  (loop repeat bytes
+     for n = 0 then (+ n 8) do
+       (write-byte (ldb (byte 8 n) uint) stream))
+  stream)
+
+(defun write-tag (stream tag)
+  "Writes a 4-character ASCII tag to the stream."
+  (loop for ch across tag do
+       (write-byte (char-code ch) stream)) stream)
+
 ;;; Functions to handle reading chunks
-(defun read-field (stream field params chunk-size)
-  "Reads a single field from a chunk."
-  (cond ((integerp (cdr field))
-         (list (cdr field) (car field) (read-uint stream (cdr field))))
-        ((eq (car field) :frames)
-         (list chunk-size
-               (car field)
-               (read-frames stream (getf params :sample-bytes) chunk-size)))
-        (t
-         (list 4 (car field) (read-tag stream)))))
+(defun default-parser (stream chunk-id chunk-size chunks)
+  (loop repeat chunk-size
+                 collect (read-uint stream 1)))
 
-(defun read-chunk (stream fields params)
-  "Creates a list of all of the properties contained in one chunk."
-  (loop with chunk-size = (read-uint stream 4)
-     for field in fields
-     for value = (read-field stream field params chunk-size)
-     for pos = (+ (or pos 0) (pop value))
-     while (<= pos chunk-size)
-     append value))
+(defun read-chunk (stream parser chunks)
+  (when-let* ((chunk-id (read-tag stream))
+              (chunk-size (read-uint stream 4))
+              (chunk-data (if (string= chunk-id "RIFF")
+                              (read-tag stream)
+                              (funcall parser stream chunk-id chunk-size chunks))))
+    (list :chunk-id chunk-id
+          :chunk-size chunk-size
+          :chunk-data chunk-data)))
 
-(defun read-chunks (stream chunk-map)
-  "Creates a list of every property contained in all the chunks."
-  (loop for chunk-id = (read-tag stream)
-     while (assoc chunk-id chunk-map :test #'equal)
-     for chunk-size = (read-uint stream 4)
-     for fields = (cdr (assoc chunk-id chunk-map :test #'equal))
-     for pos = 0
-     append (loop while (< pos chunk-size)
-               for field in fields
-               for value = (read-field stream field params chunk-size)
-               append (progn (incf pos (pop value)) value)) into params
-     finally (return params)))
+(defun read-chunks (stream &optional (parser #'default-parser))
+  "Reads every chunk in a given RIFF file using the parsers provided"
+  (loop for chunk = (read-chunk stream parser chunks)
+       unless chunk return chunks
+       collect chunk into chunks))
 
 (defun write-field (stream field params)
   "Writes a single field to a wave file."
