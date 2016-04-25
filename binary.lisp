@@ -1,7 +1,7 @@
 (in-package :cl-wave)
-;;;; wave-io.lisp
+;;;; binary.lisp
 ;;;;
-;;;; Functions for reading/writing to wave files stored on a disk.
+;;;; Functions for reading/writing to binary files
 
 ;;; Reading Functions
 (defun read-uint (stream bytes)

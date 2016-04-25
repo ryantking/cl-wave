@@ -9,7 +9,7 @@
   :license "MIT License"
   :serial t
   :components ((:file "package")
-               (:file "wave-io")
-               (:file "chunks")
+               (:file "binary")
+               (:file "riff")
                (:file "cl-wave")))
 

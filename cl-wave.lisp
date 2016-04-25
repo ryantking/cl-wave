@@ -3,6 +3,33 @@
 ;;;;
 ;;;; Core file for opening wave audio files
 
+;;; Mapping of Chunk name to fields with name and size
+(defparameter *chunks*
+  (list (cons "RIFF" (list (cons :file-type nil)))
+        (cons "fmt " (list (cons :compression-code 2)
+                           (cons :num-channels 2)
+                           (cons :sample-rate 4)
+                           (cons :byte-rate 4)
+                           (cons :sample-bytes 2)
+                           (cons :sample-bits 2)
+                           (cons :extension-size 2)))
+        (cons "data" (list (cons :frames nil)))))
+
+(defun default-params ()
+  "Create a default set of parameters for writing waves."
+  (list :file-type "WAVE"
+        :compression-code 1
+        :num-channels 1
+        :sample-rate 44100
+        :byte-rate 88200
+        :sample-bytes 2
+        :sample-bits 16
+        :extension-size 0
+        :frames '()
+        :chunk-sizes (list (cons "RIFF" 36)
+                           (cons "fmt " 16)
+                           (cons "data" 0))))
+
 ;;; Class Definitions
 (defclass wave ()
   ((io :initarg :io :accessor io)
@@ -18,7 +45,7 @@
 ;;; Wave Methods
 (defmethod initialize-instance :after ((wave read-wave) &key)
   "Sets the parameters of the wave by reading all its chunks on initialization."
-  (setf (params wave) (read-chunks (io wave))))
+  (setf (params wave) (read-chunks (io wave) *chunks*)))
 
 (defmethod get-num-channels ((wave wave))
   "Returns the number of channels the wave object has."
@@ -91,7 +118,7 @@
     (incf (cdr (assoc "data" (getf (params wave) :chunk-sizes) :test #'equal))
           (* (length (getf (params wave) :frames))
              (getf (params wave) :sample-bytes))))
-  (write-chunks (io wave) (params wave))
+  (write-chunks (io wave) *chunks* (params wave))
   (close (io wave) :abort abort))
 
 (defmacro with-open-wave ((wave-object filename &key (direction :input)) &body body)

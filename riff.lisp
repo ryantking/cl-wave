@@ -1,37 +1,7 @@
 (in-package #:cl-wave)
 ;;;; chunks.lisp
 ;;;;
-;;;; Definitions of the chunks that compose a wave file.
-
-;;; An associated-list with to store information about each chunk's fields
-;;; Information is stored in the following format:
-;;; (list (cons <chunk-id> (list (cons <field-name> <byte-size>))))
-;;; No byte size is used to indicate a special field such as file-type or frames
-(defparameter *chunks*
-  (list (cons "RIFF" (list (cons :file-type nil)))
-        (cons "fmt " (list (cons :compression-code 2)
-                           (cons :num-channels 2)
-                           (cons :sample-rate 4)
-                           (cons :byte-rate 4)
-                           (cons :sample-bytes 2)
-                           (cons :sample-bits 2)
-                           (cons :extension-size 2)))
-        (cons "data" (list (cons :frames nil)))))
-
-(defun default-params ()
-  "Create a default set of parameters for writing waves."
-  (list :file-type "WAVE"
-        :compression-code 1
-        :num-channels 1
-        :sample-rate 44100
-        :byte-rate 88200
-        :sample-bytes 2
-        :sample-bits 16
-        :extension-size nil
-        :frames '()
-        :chunk-sizes (list (cons "RIFF" 36)
-                           (cons "fmt " 16)
-                           (cons "data" 0))))
+;;;; Functions for reading/writing to RIFF files
 
 ;;; Functions to handle reading chunks
 (defun read-field (stream field params chunk-size)
@@ -47,19 +17,24 @@
 
 (defun read-chunk (stream fields params)
   "Creates a list of all of the properties contained in one chunk."
-  (loop with chunk-size = (read-uint stream 4) 
+  (loop with chunk-size = (read-uint stream 4)
      for field in fields
      for value = (read-field stream field params chunk-size)
      for pos = (+ (or pos 0) (pop value))
      while (<= pos chunk-size)
      append value))
 
-(defun read-chunks (stream)
+(defun read-chunks (stream chunk-map)
   "Creates a list of every property contained in all the chunks."
   (loop for chunk-id = (read-tag stream)
-     while (and chunk-id fields)
-     for fields = (cdr (assoc chunk-id *chunks* :test #'equal))
-     append (read-chunk stream fields params) into params
+     while (assoc chunk-id chunk-map :test #'equal)
+     for chunk-size = (read-uint stream 4)
+     for fields = (cdr (assoc chunk-id chunk-map :test #'equal))
+     for pos = 0
+     append (loop while (< pos chunk-size)
+               for field in fields
+               for value = (read-field stream field params chunk-size)
+               append (progn (incf pos (pop value)) value)) into params
      finally (return params)))
 
 (defun write-field (stream field params)
@@ -79,9 +54,9 @@
      for pos = (+ (or pos 0) size)
      while (< pos chunk-size)))
 
-(defun write-chunks (stream params)
+(defun write-chunks (stream chunk-map params)
   "Writes every chunk to a single wave file."
-  (loop for chunk in *chunks*
+  (loop for chunk in chunk-map
      for chunk-size = (cdr (assoc (car chunk) (getf params :chunk-sizes) :test #'equal)) do
        (write-tag stream (car chunk))
        (write-uint stream chunk-size 4)
