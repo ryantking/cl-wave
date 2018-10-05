@@ -10,6 +10,7 @@
   :serial t
   :depends-on (#:alexandria)
   :components ((:file "package")
+	       (:file "rtk-cl-utils")
                (:file "riff")
                (:file "wave")
                (:file "cl-wave")))
