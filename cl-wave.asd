@@ -8,8 +8,7 @@
   :author "Ryan King <rtking@bu.edu>"
   :license "MIT License"
   :serial t
-  :depends-on (#:alexandria
-               #:rtk-cl-utils)
+  :depends-on (#:alexandria)
   :components ((:file "package")
                (:file "riff")
                (:file "wave")

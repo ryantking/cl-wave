@@ -12,7 +12,7 @@
 
 (defun read-sint (stream bytes)
   "Reads a signed integer from the stream with the specified number of bytes."
-  (let1 (sint (read-uint stream bytes))
+  (let ((sint (read-uint stream bytes)))
     (if (> sint (1- (expt 2 (1- (* bytes 8)))))
         (- sint (expt 2 (* bytes 8)))
         sint)))
